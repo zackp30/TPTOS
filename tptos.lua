@@ -1,7 +1,7 @@
 --`MODULE SYSTEM "tptos main module"
 
 -------------------------------------------------------------------------------
---Common functions and constants                                             --
+--Common math functions and constants                                        --
 -------------------------------------------------------------------------------
 
 pi=     3.14159265358979323
@@ -145,7 +145,7 @@ tabledata={}
 index_min=0
 index_max=0
 function getTable(index)
- return tabledata[index]
+ return {["table"]=tabledata[index],["index"]=index}
 end
 function createTable()
  while not(tabledata[index_min]==nil) do
@@ -153,12 +153,44 @@ function createTable()
   if index_min>index_max then index_max=index_min end
  end
  tabledata[index_min]={}
- return index_min
+ index_min=index_min+1
+ if index_min>index_max then index_max=index_min end
+ return index_min-1
 end
 function freeTable(index)
  tabledata[index]=nil
  if index==index_max-1 then index_max=index end
  index_min=index
+end
+function pushTable(index,table)
+ local function copytable(from,to)
+  for k in pairs(from) do
+   if type(from[k])=='table' then
+    to[k]={}
+    copytable(from[k],to[k])
+   else
+    to[k]=from[k]
+   end
+  end
+ end
+ handle=getTable(index).table
+ copytable(table,handle)
+end
+function duplicateTable(index)
+ handle=createTable()
+ handle_dest=getTable(handle).table
+ handle_src=getTable(index).table
+ local function copytable(from,to)
+  for k in pairs(from) do
+   if type(from[k])=='table' then
+    to[k]={}
+    copytable(from[k],to[k])
+   else
+    to[k]=from[k]
+   end
+  end
+ end
+ copytable(handle_src,handle_dest)
 end
 
 -------------------------------------------------------------------------------
@@ -173,18 +205,17 @@ stream.smFromTable=3
 stream.smToTable=4
 stream.smFromStream=5
 stream.smToFile=6
-stream.streamPrototype=createTable()
-getTable(stream.streamPrototype)={
-	type="Stream",
-	filename="",
-	fileobj=nil
-	tablelink=nil,
-	tableptr=0
-	mode=stream.smClosed
-	read=function(self,len)
+stream.streamPrototable={
+	["type"]="Stream",
+	["filename"]="",
+	["fileobj"]=nil,
+	["tablelink"]=nil,
+	["tableptr"]=0,
+	["mode"]=stream.smClosed,
+	["read"]=function(self,len)
  if self.mode==smFromFile then
   return self.fileobj:read(len)
- elseif self.mode=smFromTable then
+ elseif self.mode==smFromTable then
   s=''
   if not(self.tablelink[self.tableptr]==nil) then
    for i=1,len do
@@ -194,8 +225,213 @@ getTable(stream.streamPrototype)={
    end
   end
   return s
- elseif self.mode=smFromStream then
+ elseif self.mode==smFromStream then
   return self.tableptr:read(len)
+ end
+	end,
+	["write"]=function(self,str)
+ if self.mode==smToFile then
+  self.fileobj:write(str)
+ elseif self.mode==smToTable then
+  for i=1,string.len(str) do
+   self.tablelink[self.tableptr+i]=string.byte(string.sub(str,i,i))
+  end
+  self.tableptr=self.tableptr+string.len(str)
+ elseif self.mode==smToStream then
+  self.tablelink:write(str)
+ end
+	end,
+	["open"]=function(self)
+ if self.mode==smToFile then
+  self.fileobj=io.open(self.filename,'wb')
+ elseif self.mode==smToTable then
+  self.tableptr=0
+ elseif self.mode==smToStream then
+  self.tablelink:open()
+ elseif self.mode==smFromFile then
+  self.fileobj=io.open(self.filename,'rb')
+ elseif self.mode==smFromTable then
+  self.tableptr=0
+ elseif self.mode==smFromStream then
+  self.tablelink:open()
+ end
+	end,
+	["close"]=function(self)
+ if self.mode==smToFile then
+  self.fileobj:close()
+ elseif self.mode==smToStream then
+  self.tablelink:close()
+ elseif self.mode==smFromFile then
+  self.fileobj:close()
+ elseif self.mode==smFromStream then
+  self.tablelink:close()
  end
 	end
 }
+stream.streamPrototype=createTable()
+pushTable(stream.streamPrototype,stream.streamPrototable)
+
+-------------------------------------------------------------------------------
+--Time                                                                       --
+-------------------------------------------------------------------------------
+
+time={}
+setmetatable(time,{
+	["__index"]=function(table,key)
+ if key=='seconds' then
+  return os.date('*t').sec
+ elseif key=='minutes' then
+  return os.date('*t').min
+ elseif key=='hours' then
+  return os.date('*t').hour
+ elseif key=='days' then
+  return os.date('*t').yday
+ elseif key=='years' then
+  return os.date('*t').year
+ elseif key=='day' then
+  return os.date('*t').day
+ elseif key=='month' then
+  return os.date('*t').month
+ elseif key=='total' then
+  return os.time(os.date('*t'))
+ elseif key=='_total' then
+  t=os.date('*t')
+  return (t.year-1970)*31536000+(t.yday+math.floor((t.year-2)/4-493))*86400+t.hour*3600+t.min*60+t.sec-14400
+ end
+	end
+})
+
+-------------------------------------------------------------------------------
+--Bitwise math                                                               --
+-------------------------------------------------------------------------------
+
+function bnot(a)
+ res=0
+ for i=0,7 do
+  if math.floor(a/(2^i))%2==0 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function wnot(a)
+ res=0
+ for i=0,15 do
+  if math.floor(a/(2^i))%2==0 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function dnot(a)
+ res=0
+ for i=0,31 do
+  if math.floor(a/(2^i))%2==0 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function band(a,b)
+ res=0
+ for i=0,7 do
+  if math.floor(a/(2^i))%2==1 and math.floor(b/(2^i))%2==1 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function wand(a,b)
+ res=0
+ for i=0,15 do
+  if math.floor(a/(2^i))%2==1 and math.floor(b/(2^i))%2==1 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function dand(a,b)
+ res=0
+ for i=0,31 do
+  if math.floor(a/(2^i))%2==1 and math.floor(b/(2^i))%2==1 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function bor(a,b)
+ res=0
+ for i=0,7 do
+  if math.floor(a/(2^i))%2==1 or math.floor(b/(2^i))%2==1 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function wor(a,b)
+ res=0
+ for i=0,15 do
+  if math.floor(a/(2^i))%2==1 or math.floor(b/(2^i))%2==1 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function dor(a,b)
+ res=0
+ for i=0,31 do
+  if math.floor(a/(2^i))%2==1 or math.floor(b/(2^i))%2==1 then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function bxor(a,b)
+ res=0
+ for i=0,7 do
+  if not(math.floor(a/(2^i))%2==math.floor(b/(2^i))%2) then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function wxor(a,b)
+ res=0
+ for i=0,15 do
+  if not(math.floor(a/(2^i))%2==math.floor(b/(2^i))%2) then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+function dxor(a,b)
+ res=0
+ for i=0,31 do
+  if not(math.floor(a/(2^i))%2==math.floor(b/(2^i))%2) then
+   res=res+2^i
+  end
+ end
+ return res
+end
+
+-------------------------------------------------------------------------------
+--Miscellaneous functions                                                    --
+-------------------------------------------------------------------------------
+
+environment={}
+setmetatable(environment,{
+	["__index"]=function(table,key)
+ return os.getenv(key)
+	end
+})
