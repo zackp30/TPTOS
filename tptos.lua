@@ -117,8 +117,12 @@ function log(x,y)
  return math.log(x)/math.log(y)
 end
 
-function hypot(x,y)
- return math.sqrt(x*x+y*y)
+function hypot(...)
+ sum=0
+ for i=1,arg.n do
+  sum=sum+arg[i]^2
+ end
+ return math.sqrt(sum)
 end
 
 function random(x,y)
@@ -191,6 +195,7 @@ function duplicateTable(index)
   end
  end
  copytable(handle_src,handle_dest)
+ return handle
 end
 
 -------------------------------------------------------------------------------
@@ -213,63 +218,71 @@ stream.streamPrototable={
 	["tableptr"]=0,
 	["mode"]=stream.smClosed,
 	["read"]=function(self,len)
- if self.mode==smFromFile then
+ if self.mode==stream.smFromFile then
   return self.fileobj:read(len)
- elseif self.mode==smFromTable then
+ elseif self.mode==stream.smFromTable then
   s=''
-  if not(self.tablelink[self.tableptr]==nil) then
+  if not(self.tablelink[self.tableptr+1]==nil) then
    for i=1,len do
     self.tableptr=self.tableptr+1
     if self.tablelink[self.tableptr]==nil then break end
     s=s..string.char(self.tablelink[self.tableptr])
    end
+  else
+   return nil
   end
   return s
- elseif self.mode==smFromStream then
+ elseif self.mode==stream.smFromStream then
   return self.tableptr:read(len)
  end
 	end,
 	["write"]=function(self,str)
- if self.mode==smToFile then
+ if self.mode==stream.smToFile then
   self.fileobj:write(str)
- elseif self.mode==smToTable then
+ elseif self.mode==stream.smToTable then
   for i=1,string.len(str) do
    self.tablelink[self.tableptr+i]=string.byte(string.sub(str,i,i))
   end
   self.tableptr=self.tableptr+string.len(str)
- elseif self.mode==smToStream then
+ elseif self.mode==stream.smToStream then
   self.tablelink:write(str)
  end
 	end,
-	["open"]=function(self)
- if self.mode==smToFile then
-  self.fileobj=io.open(self.filename,'wb')
- elseif self.mode==smToTable then
-  self.tableptr=0
- elseif self.mode==smToStream then
-  self.tablelink:open()
- elseif self.mode==smFromFile then
-  self.fileobj=io.open(self.filename,'rb')
- elseif self.mode==smFromTable then
-  self.tableptr=0
- elseif self.mode==smFromStream then
-  self.tablelink:open()
- end
-	end,
 	["close"]=function(self)
- if self.mode==smToFile then
+ if self.mode==stream.smToFile then
   self.fileobj:close()
- elseif self.mode==smToStream then
+ elseif self.mode==stream.smToStream then
   self.tablelink:close()
- elseif self.mode==smFromFile then
+ elseif self.mode==stream.smFromFile then
   self.fileobj:close()
- elseif self.mode==smFromStream then
+ elseif self.mode==stream.smFromStream then
   self.tablelink:close()
  end
 	end
 }
 stream.streamPrototype=createTable()
 pushTable(stream.streamPrototype,stream.streamPrototable)
+stream.open=function(name,md)
+ hnd=duplicateTable(stream.streamPrototype)
+ res=getTable(hnd).table
+ if type(name)=="table" then
+  if md=="r" or md=="rb" then
+   res.mode=stream.smFromTable
+  elseif md=="w" or md=="wb" then
+   res.mode=stream.smToTable
+  end
+  res.tablelink=name
+ else
+  if md=="r" or md=="rb" then
+   res.mode=stream.smFromFile
+  elseif md=="w" or md=="wb" then
+   res.mode=stream.smToFile
+  end
+  res.filename=name
+  res.fileobj=io.open(name,md)
+ end
+ return res,hnd
+end
 
 -------------------------------------------------------------------------------
 --Time                                                                       --
