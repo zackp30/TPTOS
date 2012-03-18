@@ -375,7 +375,7 @@ setmetatable(time,{
 		elseif key == 'total' then
 			return os.time( os.date( '*t' ) )
 		elseif key == '_total' then
-			timetable=os.date( '*t' )
+			t=os.date( '*t' )
 			--nice formula i know      s/yr                                                             s/day                                        2sh yrs
 			return ( t.year - 1970 ) * 31536000 + ( t.yday + math.floor( ( t.year - 2 ) / 4 - 493 ) ) * 86400 + t.hour * 3600 + t.min * 60 + t.sec - 14400
 		end
